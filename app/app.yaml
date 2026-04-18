@@ -1,1 +1,6 @@
 command: ["uvicorn", "backend.main:app"]
+env:
+  - name: SERVICE_PRINCIPAL_ID
+    value: '3e797737-9e91-408a-8e33-4dc62e46f35d'
+  - name: SERVICE_PRINCIPAL_SECRET
+    value: 'dose8501490719027c112382cebd9e344425'

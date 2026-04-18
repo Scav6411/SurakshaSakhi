@@ -42,6 +42,16 @@ def _fetch_rows(w: WorkspaceClient, statement_id: str) -> dict | None:
     return {"columns": columns, "rows": rows}
 
 
+@router.get("/debug-env")
+def debug_env():
+    return {k: ("SET" if v else "EMPTY") for k, v in {
+        "DATABRICKS_HOST":          os.environ.get("DATABRICKS_HOST"),
+        "DATABRICKS_TOKEN":         os.environ.get("DATABRICKS_TOKEN"),
+        "DATABRICKS_CLIENT_ID":     os.environ.get("DATABRICKS_CLIENT_ID"),
+        "DATABRICKS_CLIENT_SECRET": os.environ.get("DATABRICKS_CLIENT_SECRET"),
+    }.items()}
+
+
 @router.post("/query")
 def genie_query(body: GenieQuery):
     try:

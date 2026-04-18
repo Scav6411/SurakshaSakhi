@@ -5,7 +5,7 @@ import urllib.request
 import urllib.parse
 from base64 import b64encode
 from fastapi import APIRouter, HTTPException
-from ..database import run_query, WAREHOUSE_ID
+from ..database import run_query, WAREHOUSE_ID, _client
 from ..scoring import get_loaded_models
 
 logger = logging.getLogger(__name__)
@@ -49,10 +49,16 @@ async def embed_token():
     Requires env vars: DATABRICKS_SP_CLIENT_ID, DATABRICKS_SP_CLIENT_SECRET
     Optional:          DASHBOARD_EXTERNAL_VIEWER_ID, DASHBOARD_EXTERNAL_VALUE
     """
-    sp_id     = os.environ.get("DATABRICKS_SP_CLIENT_ID")
-    sp_secret = os.environ.get("DATABRICKS_SP_CLIENT_SECRET")
+    sp_id     = os.environ.get("SERVICE_PRINCIPAL_ID")
+    sp_secret = os.environ.get("SERVICE_PRINCIPAL_SECRET")
+
+    # Fallback: use the SDK's own OAuth token when no SP is configured
     if not sp_id or not sp_secret:
-        raise HTTPException(status_code=500, detail="Service principal env vars not set")
+        logger.warning("SP env vars not set — falling back to SDK auth token")
+        headers: dict = {}
+        _client.config.authenticate(headers)
+        token = headers.get("Authorization", "").removeprefix("Bearer ")
+        return {"token": token}
 
     ext_viewer = os.environ.get("DASHBOARD_EXTERNAL_VIEWER_ID", "suraksha-anm")
     ext_value  = os.environ.get("DASHBOARD_EXTERNAL_VALUE",     "suraksha-app")

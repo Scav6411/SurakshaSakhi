@@ -462,7 +462,7 @@ dd { font-size: 13px; font-weight: 500; }
 .va-panel {
   background: white;
   border-radius: 18px;
-  width: 320px;
+  width: 480px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.18);
   overflow: hidden;
   animation: slide-up 0.2s ease;
@@ -506,8 +506,8 @@ dd { font-size: 13px; font-weight: 500; }
 
 .va-body {
   padding: 16px;
-  min-height: 80px;
-  max-height: 180px;
+  min-height: 120px;
+  max-height: 320px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -625,6 +625,6 @@ dd { font-size: 13px; font-weight: 500; }
   .form-grid   { grid-template-columns: 1fr; }
   .app-subtitle { display: none; }
   .list-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .va-panel { width: 290px; }
+  .va-panel { width: 360px; }
   .dash-cards-header { flex-direction: column; align-items: flex-start; }
 }
