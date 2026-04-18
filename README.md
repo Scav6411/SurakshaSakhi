@@ -49,94 +49,112 @@ SurakshaSakhi turns the Annual Health Survey dataset into a priority queue for A
 
 ```mermaid
 flowchart TD
-    CSV["📄 AHS Survey CSV\n10,606 rows × 350 cols\n/Volumes/suraksha_data/"]
+    CSV["AHS Survey CSV"]
 
-    subgraph DeltaLake["Databricks Delta Lake — workspace.suraksha"]
-        RAW["raw_survey\n10,606 rows"]
-        SCORES["risk_scores\n1,734 pregnant women\nranked by priority"]
-        PATIENTS["patients\napp-managed records"]
-        VISITLOG["visit_log\nANM field notes"]
-        IMMUNIZATION["immunization_scores\nModel 3 output"]
+    subgraph DeltaLake["Delta Lake — workspace.suraksha"]
+        RAW["raw_survey"]
+        SCORES["risk_scores"]
+        PATIENTS["patients"]
+        VISITLOG["visit_log"]
+        IMMUNIZATION["immunization_scores"]
     end
 
-    subgraph Notebooks["Databricks Notebooks (PySpark + sklearn)"]
-        N01["01_ingest.py\nCSV → Delta"]
-        N03["03_model1_complications.py\n6 RF classifiers"]
-        N04["04_model2_home_delivery.py\n1 RF classifier"]
-        N05["05_model3_immunization.py\n1 RF classifier"]
-        N07["07_score_pipeline.py\nScore 1,734 women"]
+    subgraph Notebooks["Databricks Notebooks"]
+        N01["01_ingest"]
+        N03["03_model1_complications"]
+        N04["04_model2_home_delivery"]
+        N05["05_model3_immunization"]
+        N07["07_score_pipeline"]
     end
 
-    MLFLOW["MLflow\n18 tracked runs\nAUC-ROC + feature importance"]
+    MLFLOW["MLflow Tracking"]
 
-    subgraph App["Databricks App (FastAPI + React)"]
-        BACKEND["FastAPI Backend\n/api/patients\n/api/dashboard/psu\n/api/genie/query"]
-        FRONTEND["React Frontend\nDashboard · Patient List\nPatient Detail · Voice"]
+    subgraph App["Databricks App"]
+        BACKEND["FastAPI Backend"]
+        FRONTEND["React Frontend"]
     end
 
-    GENIE["Databricks Genie\nConversations API\nNL → SQL → answer"]
+    GENIE["Databricks Genie"]
 
     CSV --> N01 --> RAW
-    RAW -->|training data\n8,872 completed pregnancies| N03 & N04 & N05
-    N03 & N04 & N05 -->|"log models + metrics"| MLFLOW
-    N03 & N04 & N05 -->|"pkl artifacts → Volume"| N07
+    RAW --> N03
+    RAW --> N04
+    RAW --> N05
+    N03 --> MLFLOW
+    N04 --> MLFLOW
+    N05 --> MLFLOW
+    N03 --> N07
+    N04 --> N07
+    N05 --> N07
     N05 --> IMMUNIZATION
     N07 --> SCORES
-    SCORES & PATIENTS & VISITLOG -->|"Databricks SQL\nStatement Execution API"| BACKEND
-    BACKEND <-->|"Genie REST API"| GENIE
-    GENIE <-->|"queries"| SCORES
+    SCORES --> BACKEND
+    PATIENTS --> BACKEND
+    VISITLOG --> BACKEND
+    BACKEND <--> GENIE
+    GENIE <--> SCORES
     BACKEND --> FRONTEND
 ```
+
+> **Data volumes:** CSV has 10,606 rows × 350 cols. Training uses 8,872 completed pregnancies. Scoring produces 1,734 ranked pregnant women.
 
 ### Databricks Components Detail
 
 ```mermaid
 flowchart LR
-    subgraph UC["Unity Catalog — workspace.default"]
-        VOL["Volume\nsuraksha_data/\n├── ahs_araria.csv\n└── models/*.pkl"]
+    subgraph UC["Unity Catalog Volumes"]
+        VOL["suraksha_data"]
     end
 
-    subgraph Schema["Unity Catalog Schema — workspace.suraksha"]
-        T1["raw_survey\n10,606 × 350"]
-        T2["risk_scores\n1,734 rows\nw_id · PSU_ID · age\nrisk_complication\nrisk_home_delivery\nrisk_immunization\npriority_level · rank"]
-        T3["patients\napp CRUD"]
-        T4["visit_log\nfield notes"]
+    subgraph Schema["Schema — workspace.suraksha"]
+        T1["raw_survey"]
+        T2["risk_scores"]
+        T3["patients"]
+        T4["visit_log"]
         T5["immunization_scores"]
     end
 
     subgraph MLflow["MLflow Tracking"]
-        EXP1["Experiment: complications\n6 runs · AUC-ROC each"]
-        EXP2["Experiment: home_delivery\n1 run"]
-        EXP3["Experiment: immunization\n1 run"]
+        EXP1["complications exp"]
+        EXP2["home_delivery exp"]
+        EXP3["immunization exp"]
     end
 
-    subgraph SDK["Databricks SDK / Auth"]
-        AUTH["WorkspaceClient\nLocal: ~/.databrickscfg Ayush\nDatabricks App: injected SP"]
-        SQLAPI["Statement Execution API\nwarehouse auto-discovered"]
-        GENIEAPI["Genie Conversations API\nSpace: 01f13b07..."]
+    subgraph SDK["Databricks SDK"]
+        AUTH["WorkspaceClient"]
+        SQLAPI["Statement Execution API"]
+        GENIEAPI["Genie Conversations API"]
     end
 
     VOL --> T1
-    T1 -->|train| EXP1 & EXP2 & EXP3
-    EXP1 & EXP2 & EXP3 -->|artifacts| VOL
-    VOL -->|load pkl| T2
-    T2 & T3 & T4 --> SQLAPI
-    AUTH --> SQLAPI & GENIEAPI
-    SQLAPI --> T2
-    GENIEAPI -->|NL→SQL| T2
+    T1 --> EXP1
+    T1 --> EXP2
+    T1 --> EXP3
+    EXP1 --> VOL
+    EXP2 --> VOL
+    EXP3 --> VOL
+    VOL --> T2
+    T2 --> SQLAPI
+    T3 --> SQLAPI
+    T4 --> SQLAPI
+    AUTH --> SQLAPI
+    AUTH --> GENIEAPI
+    GENIEAPI --> T2
 ```
+
+> **Volume contents:** `ahs_araria.csv` + `models/*.pkl` · **Auth:** local uses `~/.databrickscfg` profile `Ayush`, Databricks Apps uses injected service principal · **Genie Space:** `01f13b07...`
 
 ### ML Model Pipeline
 
 ```mermaid
 flowchart TD
     subgraph Features["Feature Groups"]
-        DEMO["Demographics\nage · rural · social_group\nmarital_status · w_preg_no"]
-        ANC["ANC Symptoms\nhad_anc_registration\nswelling · hypertension\nconvulsion · anaemia"]
-        SOCIO["Socioeconomic\nhousehold assets\ndistance to facility\neducation · parity"]
+        DEMO["Demographics"]
+        ANC["ANC Symptoms"]
+        SOCIO["Socioeconomic"]
     end
 
-    subgraph M1["Model 1 — Delivery Complications\n6 Binary RF Classifiers"]
+    subgraph M1["Model 1 — Complications"]
         C1["premature_labour"]
         C2["prolonged_labour"]
         C3["obstructed_labour"]
@@ -145,23 +163,34 @@ flowchart TD
         C6["breech_presentation"]
     end
 
-    subgraph M2["Model 2 — Home Delivery Risk\n1 Binary RF Classifier"]
-        HD["At Home vs Institution"]
+    subgraph M2["Model 2 — Home Delivery"]
+        HD["Home vs Institution"]
     end
 
-    subgraph M3["Model 3 — Immunization Dropout\n1 Binary RF Classifier"]
-        IM["BCG+Polio+DPT+Measles\nincomplete flag"]
+    subgraph M3["Model 3 — Immunization"]
+        IM["Dropout Flag"]
     end
 
-    AGGS["Aggregate Scores\nmax(M1 probs) → risk_complication\nM2 prob → risk_home_delivery\nM3 prob → risk_immunization\nweighted average → overall_risk"]
+    AGGS["Aggregate Scores"]
+    RANK["Priority Rank"]
 
-    RANK["Priority Rank\n1 = highest risk\nRisk Level: CRITICAL / HIGH / MEDIUM / LOW"]
-
-    DEMO & ANC --> M1
-    DEMO & SOCIO --> M2
-    DEMO & SOCIO --> M3
-    M1 & M2 & M3 --> AGGS --> RANK
+    DEMO --> M1
+    ANC --> M1
+    DEMO --> M2
+    SOCIO --> M2
+    DEMO --> M3
+    SOCIO --> M3
+    M1 --> AGGS
+    M2 --> AGGS
+    M3 --> AGGS
+    AGGS --> RANK
 ```
+
+> **Features:** Demographics = age, rural, social_group, marital_status, parity · ANC = registration, swelling, hypertension, convulsion, anaemia · Socioeconomic = household assets, facility distance, education
+>
+> **Aggregation:** `max(M1 probs)` → risk_complication · M2 prob → risk_home_delivery · M3 prob → risk_immunization · weighted avg → overall_risk
+>
+> **Ranking:** 1 = highest risk · Levels: 🔴 CRITICAL · 🟠 HIGH · 🟡 MEDIUM · 🟢 LOW
 
 ---
 
